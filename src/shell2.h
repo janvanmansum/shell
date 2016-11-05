@@ -4,18 +4,34 @@
 #define MAXLINE 	 4096
 #define MAXCOMMANDS    20
 #define MAXARGS		   20
-#define MAXREDIRECTS   20
+
+#define INPUT_REDIRECT 	0
+#define OUTPUT_REDIRECT 1
+#define ARG				2
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <ctype.h>
+
 
 typedef struct {
 	bool filled;
 	char *args[MAXARGS + 1];
-	char *inputs[MAXREDIRECTS + 1];
-	char *outputs[MAXREDIRECTS + 1];
+	char *input;
+	char *output;
 } COMMAND;
 
+
+
+void prompt(void);
+
+void print_array(char *a[]);
+
+void debug(char *msg);
 
 /*
  * Haalt de volgende regel op. Retourneert false bij het einde van de invoer.
@@ -35,6 +51,9 @@ bool is_blocking_call(char line[]);
 int get_commands(char line[], COMMAND (*commands)[]);
 
 
+int get_part_type(int index, char s[]);
+
+
 /*
  * Vult de COMMAND structure aan de hand van de informatie gevonden in line. line mag geen pipe-tekens meer
  * bevatten; m.a.w. line mag slechts één proces starten.
@@ -46,7 +65,7 @@ void get_command(char line[], COMMAND *command);
  * standaard invoer van het opvolgende commando steeds een pipe wordt aangelegd. De functie wacht
  * afhankelijk van de waarde van blocking wel (1) of niet (0) op de exit status van het laatste commando.
  */
-void execute_commands(COMMAND (*commands)[], int blocking);
+void execute_commands(COMMAND (*commands)[], bool blocking);
 
 /*
  * Voer het commando cmd uit als het een ingebouwd commando is, zoals cd of exit. De returnwaarde geeft aan
@@ -58,13 +77,16 @@ bool execute_builtin(COMMAND *cmd);
  * Voert het commando cmd uit en wacht daarbij, afhankelijk van de waarde van blocking wel of niet
  * op de exit status van het proces.
  */
-void execute_command(COMMAND *cmd, bool blocking, FILE* in_pipe, FILE* out_pipe);
+void execute_command(COMMAND *cmd, bool blocking, int in_filedes, int out_filedes);
 
 
 /*
  * Initialiseert de velden van alle elementen in de array commands op null.
  */
 void reset_commands(COMMAND (*commands)[]);
+
+void reset_command(COMMAND *command);
+
 
 
 int split(char s[], const char *delim, char *parts[]);
