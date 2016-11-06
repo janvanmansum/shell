@@ -17,12 +17,15 @@
 #include <unistd.h>
 #include <ctype.h>
 
-
 typedef struct {
 	bool filled;
 	char *args[MAXARGS + 1];
 	char *input;
 	char *output;
+	int in_pipe[2];
+	bool in_pipe_set;
+	int out_pipe[2];
+	bool out_pipe_set;
 } COMMAND;
 
 
@@ -37,6 +40,8 @@ void debug(char *msg);
  * Haalt de volgende regel op. Retourneert false bij het einde van de invoer.
  */
 bool get_next_line(char line[]);
+
+bool is_blank(char line[]);
 
 /*
  * Bepaalt of de commandoregel een blocking call voorstelt (zonder &) of een background call.
@@ -65,7 +70,9 @@ void get_command(char line[], COMMAND *command);
  * standaard invoer van het opvolgende commando steeds een pipe wordt aangelegd. De functie wacht
  * afhankelijk van de waarde van blocking wel (1) of niet (0) op de exit status van het laatste commando.
  */
-void execute_commands(COMMAND (*commands)[], bool blocking);
+void execute_commands(COMMAND (*commands)[], int ncmd, bool blocking);
+
+
 
 /*
  * Voer het commando cmd uit als het een ingebouwd commando is, zoals cd of exit. De returnwaarde geeft aan
@@ -73,11 +80,16 @@ void execute_commands(COMMAND (*commands)[], bool blocking);
  */
 bool execute_builtin(COMMAND *cmd);
 
+
+void exit_shell(void);
+
 /*
  * Voert het commando cmd uit en wacht daarbij, afhankelijk van de waarde van blocking wel of niet
  * op de exit status van het proces.
  */
-void execute_command(COMMAND *cmd, bool blocking, int in_filedes, int out_filedes);
+int execute_command(COMMAND *cmd, bool blocking);
+
+void exec_command(COMMAND *cmd);
 
 
 /*
