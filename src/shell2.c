@@ -140,9 +140,6 @@ void execute_commands(COMMAND (*commands)[], int ncmd, bool blocking) {
 	for (int i = 0; i < ncmd; ++i) {
 		COMMAND *cmd = *commands + i;
 		if (i > 0) {
-			printf("i = %d\n", i);
-			fflush(stdout);
-
 			pipe(fds);
 			cmd->in_pipe[0] = fds[0];
 			cmd->in_pipe[1] = fds[1];
@@ -151,14 +148,12 @@ void execute_commands(COMMAND (*commands)[], int ncmd, bool blocking) {
 			prev_cmd->out_pipe[0] = fds[0];
 			prev_cmd->out_pipe[1] = fds[1];
 			prev_cmd->out_pipe_set = true;
-		} else if (cmd->input != NULL) {
-			// TODO
 		}
 	}
 
-	for (int i = 0; i < ncmd; ++i) {
+	for (int i = ncmd - 1; i != -1; --i) {
 		COMMAND *cmd = *commands + i;
-		execute_command(cmd, i == ncmd && blocking);
+		execute_command(cmd, i == 0 && blocking);
 	}
 }
 
@@ -210,6 +205,16 @@ int execute_command(COMMAND *cmd, bool block) {
 			exec_command(cmd);
 		}
 
+		if (cmd->in_pipe_set) {
+			close(cmd->in_pipe[0]);
+			close(cmd->in_pipe[1]);
+		}
+
+		if (cmd->out_pipe_set) {
+			close(cmd->out_pipe[0]);
+			close(cmd->out_pipe[1]);
+		}
+
 		/*
 		 * Hier zijn we in het de ouder (de shell).
 		 */
@@ -245,6 +250,16 @@ int execute_command(COMMAND *cmd, bool block) {
 			exec_command(cmd);
 		}
 
+		if (cmd->in_pipe_set) {
+			close(cmd->in_pipe[0]);
+			close(cmd->in_pipe[1]);
+		}
+
+		if (cmd->out_pipe_set) {
+			close(cmd->out_pipe[0]);
+			close(cmd->out_pipe[1]);
+		}
+
 		/*
 		 * Hier zijn we in de grootouder (de shell). We wachten wel op het kind-proces, anders zou dat een "zombie"
 		 * worden.
@@ -258,8 +273,6 @@ int execute_command(COMMAND *cmd, bool block) {
 
 void exec_command(COMMAND *cmd) {
 	if (cmd->in_pipe_set) {
-		fprintf(stderr, "command = %s\n", cmd->args[0]);
-		debug("in pipe set");
 		close(cmd->in_pipe[1]);
 		dup2(cmd->in_pipe[0], STDIN_FILENO);
 		close(cmd->in_pipe[0]);
@@ -270,21 +283,18 @@ void exec_command(COMMAND *cmd) {
 	}
 
 	if (cmd->out_pipe_set) {
-		fprintf(stderr, "command = %s\n", cmd->args[0]);
-		debug("out pipe set");
 		close(cmd->out_pipe[0]);
 		dup2(cmd->out_pipe[1], STDOUT_FILENO);
 		close(cmd->out_pipe[1]);
-		debug("finished with out pipe");
 	} else if (cmd->output != NULL) {
+		printf("output-file for %s = %s\n", cmd->args[0], cmd->output);
+		fflush(stdout);
 		int out_filedes = open(cmd->output, O_WRONLY | O_CREAT,
 		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 		dup2(out_filedes, STDOUT_FILENO);
 		close(out_filedes);
 	}
 
-	fprintf(stderr, "before execute: command = %s\n", cmd->args[0]);
-	debug("about to execute");
 	execvp(cmd->args[0], cmd->args);
 	fprintf(stderr, "Could not execute command: %s\n", cmd->args[0]);
 	exit(127);
