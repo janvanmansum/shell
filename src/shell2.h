@@ -1,6 +1,5 @@
-//#define TEST
-
-
+//#define TEST2
+#define PROD
 #define MAXLINE 	 4096
 #define MAXCOMMANDS    20
 #define MAXARGS		   20
@@ -22,13 +21,19 @@ typedef struct {
 	char *args[MAXARGS + 1];
 	char *input;
 	char *output;
-	int in_pipe[2];
-	bool in_pipe_set;
-	int out_pipe[2];
-	bool out_pipe_set;
+	int in_pipe_index;
+	int out_pipe_index;
 } COMMAND;
 
+typedef struct {
+	int npipes;
+	int pipes[MAXCOMMANDS - 1][2];
+} PIPES;
 
+
+void create_pipes(PIPES *pipes, int npipes);
+
+void close_pipes(PIPES *pipes);
 
 void prompt(void);
 

@@ -104,9 +104,11 @@ void test_is_blocking_call(void) {
 	char non_blocking_call[] = "cmd 1 2 3 & ";
 	BCHECK(!is_blocking_call(non_blocking_call))
 	BCHECK(10 == strlen(non_blocking_call))
-
-
 }
+
+
+
+
 
 int main(void) {
 	test_get_part_type();

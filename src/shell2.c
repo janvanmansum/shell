@@ -14,7 +14,9 @@
 #include <fcntl.h>
 #include "shell2.h"
 
-#ifndef TEST
+static PIPES pipes;
+
+#ifdef PROD
 int main(void) {
 	char line[MAXLINE];
 	COMMAND commands[MAXCOMMANDS];
@@ -137,24 +139,28 @@ void execute_commands(COMMAND (*commands)[], int ncmd, bool blocking) {
 		return;
 	int fds[2];
 
+//	debug("Create pipes");
+	create_pipes(&pipes, ncmd - 1);
+
+//	debug("Settings pipes");
 	for (int i = 0; i < ncmd; ++i) {
 		COMMAND *cmd = *commands + i;
 		if (i > 0) {
 			pipe(fds);
-			cmd->in_pipe[0] = fds[0];
-			cmd->in_pipe[1] = fds[1];
-			cmd->in_pipe_set = true;
+			cmd->in_pipe_index = i - 1;
 			COMMAND *prev_cmd = *commands + (i - 1);
-			prev_cmd->out_pipe[0] = fds[0];
-			prev_cmd->out_pipe[1] = fds[1];
-			prev_cmd->out_pipe_set = true;
+			prev_cmd->out_pipe_index = i - 1;
 		}
 	}
 
+//	printf("ncmd = %d", ncmd);
+//	debug("Executing commands");
 	for (int i = ncmd - 1; i != -1; --i) {
 		COMMAND *cmd = *commands + i;
 		execute_command(cmd, i == 0 && blocking);
 	}
+
+	close_pipes(&pipes);
 }
 
 bool execute_builtin(COMMAND *cmd) {
@@ -190,7 +196,7 @@ void exit_shell(void) {
 int execute_command(COMMAND *cmd, bool block) {
 	pid_t pid;
 	int status = 0;
-
+//	debug("Execute command");
 	if (block) {
 		/*
 		 * Als het proces gewoon op de voorgrond kan draaien, hoeven we maar één keer te forken en wachten we daarna
@@ -203,16 +209,6 @@ int execute_command(COMMAND *cmd, bool block) {
 			 * Hier zijn we in het kind-proces.
 			 */
 			exec_command(cmd);
-		}
-
-		if (cmd->in_pipe_set) {
-			close(cmd->in_pipe[0]);
-			close(cmd->in_pipe[1]);
-		}
-
-		if (cmd->out_pipe_set) {
-			close(cmd->out_pipe[0]);
-			close(cmd->out_pipe[1]);
 		}
 
 		/*
@@ -250,16 +246,6 @@ int execute_command(COMMAND *cmd, bool block) {
 			exec_command(cmd);
 		}
 
-		if (cmd->in_pipe_set) {
-			close(cmd->in_pipe[0]);
-			close(cmd->in_pipe[1]);
-		}
-
-		if (cmd->out_pipe_set) {
-			close(cmd->out_pipe[0]);
-			close(cmd->out_pipe[1]);
-		}
-
 		/*
 		 * Hier zijn we in de grootouder (de shell). We wachten wel op het kind-proces, anders zou dat een "zombie"
 		 * worden.
@@ -272,20 +258,20 @@ int execute_command(COMMAND *cmd, bool block) {
 }
 
 void exec_command(COMMAND *cmd) {
-	if (cmd->in_pipe_set) {
-		close(cmd->in_pipe[1]);
-		dup2(cmd->in_pipe[0], STDIN_FILENO);
-		close(cmd->in_pipe[0]);
+	if (cmd->in_pipe_index != -1) {
+		printf("Setting fd = %d to stdin", pipes.pipes[cmd->in_pipe_index][0]);
+		fflush(stderr);
+		dup2(pipes.pipes[cmd->in_pipe_index][0], STDIN_FILENO);
 	} else if (cmd->input != NULL) {
 		int in_filedes = open(cmd->input, O_RDONLY);
 		dup2(in_filedes, STDIN_FILENO);
 		close(in_filedes);
 	}
 
-	if (cmd->out_pipe_set) {
-		close(cmd->out_pipe[0]);
-		dup2(cmd->out_pipe[1], STDOUT_FILENO);
-		close(cmd->out_pipe[1]);
+	if (cmd->out_pipe_index != -1) {
+		printf("Setting fd = %d to stdout", pipes.pipes[cmd->out_pipe_index][0]);
+		fflush(stderr);
+		dup2(pipes.pipes[cmd->out_pipe_index][1], STDOUT_FILENO);
 	} else if (cmd->output != NULL) {
 		printf("output-file for %s = %s\n", cmd->args[0], cmd->output);
 		fflush(stdout);
@@ -295,6 +281,7 @@ void exec_command(COMMAND *cmd) {
 		close(out_filedes);
 	}
 
+	close_pipes(&pipes);
 	execvp(cmd->args[0], cmd->args);
 	fprintf(stderr, "Could not execute command: %s\n", cmd->args[0]);
 	exit(127);
@@ -326,8 +313,22 @@ void reset_commands(COMMAND (*commands)[]) {
 void reset_command(COMMAND *command) {
 	command->filled = false;
 	command->args[0] = NULL;
-	command->in_pipe_set = false;
-	command->out_pipe_set = false;
+	command->in_pipe_index = -1;
+	command->out_pipe_index = -1;
 	command->input = NULL;
 	command->output = NULL;
+}
+
+void create_pipes(PIPES *pipes, int npipes) {
+	for (int i = 0; i != npipes; ++i)
+		pipe(pipes->pipes[i]);
+	pipes->npipes = npipes;
+}
+
+void close_pipes(PIPES *pipes) {
+	for (int i = 0; i != pipes->npipes; ++i) {
+		close(pipes->pipes[i][0]);
+		close(pipes->pipes[i][1]);
+	}
+	pipes->npipes = 0;
 }
