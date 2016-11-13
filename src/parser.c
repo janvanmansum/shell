@@ -13,6 +13,23 @@ static int get_part_type(int index, char s[]) ;
 static void reset_command(COMMAND *command);
 
 
+bool is_blank(char line[]) {
+	for (char *p = line; *p != 0; ++p)
+		if (!isspace(*p))
+			return false;
+	return true;
+}
+
+bool is_blocking_call(char line[]) {
+	char *p;
+
+	if ((p = strrchr(line, '&')) != NULL) {
+		*p = '\0';
+		return false;
+	}
+
+	return true;
+}
 int get_commands(char line[], COMMAND (*commands)[]) {
 	char *cmdlines[MAXCOMMANDS];
 	int ncmd = split(line, "|", cmdlines);
@@ -22,18 +39,9 @@ int get_commands(char line[], COMMAND (*commands)[]) {
 	return ncmd;
 }
 
-static int split(char s[], const char *delim, char *parts[]) {
-	char *p;
-	int i = 0;
-	p = strtok(s, delim);
-	while (p != NULL) {
-		if (parts != NULL)
-			parts[i++] = p;
-		p = strtok(NULL, delim);
-	}
-	if (parts != NULL)
-		parts[i] = NULL;
-	return i;
+void reset_commands(COMMAND (*commands)[]) {
+	for (int i = 0; i < MAXCOMMANDS; ++i)
+		reset_command(*commands + i);
 }
 
 static void get_command(char line[], COMMAND *command) {
@@ -60,9 +68,18 @@ static void get_command(char line[], COMMAND *command) {
 	command->args[iargs] = 0;
 }
 
-void reset_commands(COMMAND (*commands)[]) {
-	for (int i = 0; i < MAXCOMMANDS; ++i)
-		reset_command(*commands + i);
+static int split(char s[], const char *delim, char *parts[]) {
+	char *p;
+	int i = 0;
+	p = strtok(s, delim);
+	while (p != NULL) {
+		if (parts != NULL)
+			parts[i++] = p;
+		p = strtok(NULL, delim);
+	}
+	if (parts != NULL)
+		parts[i] = NULL;
+	return i;
 }
 
 static void reset_command(COMMAND *command) {
@@ -85,23 +102,3 @@ static int get_part_type(int index, char s[]) {
 	return ARG;
 }
 
-bool is_blank(char line[]) {
-	for (char *p = line; *p != 0; ++p)
-		if (isspace(*p))
-			continue;
-		else
-			return false;
-
-	return true;
-}
-
-bool is_blocking_call(char line[]) {
-	char *p;
-
-	if ((p = strrchr(line, '&')) != NULL) {
-		*p = '\0';
-		return false;
-	}
-
-	return true;
-}
