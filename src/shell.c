@@ -10,7 +10,7 @@ int main(void) {
 	char line[MAXLINE];
 	COMMAND commands[MAXCOMMANDS];
 	bool blocking = true;
-	int ncmd = 0;
+	int number_of_cmds = 0;
 
 	prompt();
 	while (get_next_line(line)) {
@@ -19,8 +19,8 @@ int main(void) {
 			continue;
 		}
 		blocking = is_blocking_call(line);
-		ncmd = get_commands(line, &commands);
-		run_commands(&commands, ncmd, blocking);
+		number_of_cmds = get_commands(line, &commands);
+		run_commands(&commands, number_of_cmds, blocking);
 		reset_commands(&commands);
 		prompt();
 	}

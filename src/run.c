@@ -8,39 +8,38 @@
 #include <fcntl.h>
 
 struct {
-	int npipes;
+	int size;
 	int pipes[MAXCOMMANDS - 1][2];
 } pipes;
 
 static bool execute_builtin(COMMAND *cmd);
+static void create_pipes(int npipes);
+static void install_pipes(COMMAND (*commands)[], int ncmd);
+static void create_processes(COMMAND (*commands)[], bool blocking, int ncmd, pid_t (*pids)[]);
 static pid_t create_process(COMMAND *cmd, bool foreground);
 static void exec_command(COMMAND *cmd);
-static void create_pipes(int npipes);
 static void close_pipes();
-
-//void install_pipes(COMMAND (*commands)[], int ncmd) {
-//	COMMAND cmds = *commands;
-//
-//	for (int i = 0; i < ncmd; ++i) {
-//		COMMAND *cmd = *commands + i;
-//		if (i > 0) {
-//			cmd->in_pipe_index = i - 1;
-//			COMMAND *prev_cmd = *commands + (i - 1);
-//			prev_cmd->out_pipe_index = i - 1;
-//		}
-//	}
-//}
-
+static void wait_for_processes(COMMAND (*commands)[], int ncmd, pid_t (*pids)[]);
 
 void run_commands(COMMAND (*commands)[], int ncmd, bool blocking) {
-	int status;
 	pid_t pids[MAXCOMMANDS];
 
 	if (execute_builtin(*commands))
 		return;
 
 	create_pipes(ncmd - 1);
+	install_pipes(commands, ncmd);
+	create_processes(commands, blocking, ncmd, &pids);
+	close_pipes();
+	wait_for_processes(commands, ncmd, &pids);
+}
 
+void exit_shell(void) {
+	printf("Good-bye!\n");
+	exit(0);
+}
+
+static void install_pipes(COMMAND (*commands)[], int ncmd) {
 	for (int i = 0; i < ncmd; ++i) {
 		COMMAND *cmd = *commands + i;
 		if (i > 0) {
@@ -49,25 +48,22 @@ void run_commands(COMMAND (*commands)[], int ncmd, bool blocking) {
 			prev_cmd->out_pipe_index = i - 1;
 		}
 	}
+}
 
-	for (int i = ncmd - 1; i != -1; --i) {
+static void create_processes(COMMAND (*commands)[], bool blocking, int ncmd, pid_t (*pids)[]) {
+	for (int i = 0; i != ncmd	; ++i) {
 		COMMAND *cmd = *commands + i;
-		pids[i] = create_process(cmd, blocking);
+		(*pids)[i] = create_process(cmd, blocking);
 	}
+}
 
-	close_pipes(&pipes);
-
+static void wait_for_processes(COMMAND (*commands)[], int ncmd, pid_t (*pids)[]) {
+	int status;
 	for (int i = 0; i != ncmd; ++i) {
-		if (waitpid(pids[i], &status, 0) != pids[i])
+		if (waitpid((*pids)[i], &status, 0) != (*pids)[i])
 			fprintf(stderr, "Error waiting for command to finish: %s",
 					(*commands)[i].args[0]);
 	}
-
-}
-
-void exit_shell(void) {
-	printf("Good-bye!\n");
-	exit(0);
 }
 
 static bool execute_builtin(COMMAND *cmd) {
@@ -169,14 +165,14 @@ static void exec_command(COMMAND *cmd) {
 static void create_pipes(int npipes) {
 	for (int i = 0; i != npipes; ++i)
 		pipe(pipes.pipes[i]);
-	pipes.npipes = npipes;
+	pipes.size = npipes;
 }
 
 static void close_pipes() {
-	for (int i = 0; i != pipes.npipes; ++i) {
+	for (int i = 0; i != pipes.size; ++i) {
 		close(pipes.pipes[i][0]);
 		close(pipes.pipes[i][1]);
 	}
-	pipes.npipes = 0;
+	pipes.size = 0;
 }
 

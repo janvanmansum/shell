@@ -10,7 +10,6 @@
 #include <stdbool.h>
 
 typedef struct {
-	bool filled;
 	char *args[MAXARGS + 1];
 	char *input;
 	char *output;

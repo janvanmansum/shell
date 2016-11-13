@@ -58,7 +58,6 @@ static void get_command(char line[], COMMAND *command) {
 		}
 	}
 	command->args[iargs] = 0;
-	command->filled = true;
 }
 
 void reset_commands(COMMAND (*commands)[]) {
@@ -67,7 +66,6 @@ void reset_commands(COMMAND (*commands)[]) {
 }
 
 static void reset_command(COMMAND *command) {
-	command->filled = false;
 	command->args[0] = NULL;
 	command->in_pipe_index = -1;
 	command->out_pipe_index = -1;
