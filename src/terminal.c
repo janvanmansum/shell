@@ -1,6 +1,7 @@
 #include "common.h"
 #include "terminal.h"
 #include <stdio.h>
+#include <string.h>
 
 void prompt(void) {
 	printf("$ ");
