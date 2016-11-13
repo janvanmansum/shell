@@ -1,4 +1,5 @@
 #include "run.h"
+#include "common.h"
 #include <stdio.h>
 #include <sys/wait.h>
 #include <stdlib.h>
@@ -156,7 +157,7 @@ static void exec_command(COMMAND *cmd) {
 		close(out_filedes);
 	}
 
-	close_pipes(&pipes);
+	close_pipes();
 	execvp(cmd->args[0], cmd->args);
 	fprintf(stderr, "Could not execute command: %s\n", cmd->args[0]);
 	exit(127);
