@@ -1,4 +1,5 @@
 #define PROD
+#define LOG
 
 #ifndef COMMON_H
 #define COMMON_H
