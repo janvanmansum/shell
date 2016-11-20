@@ -1,4 +1,7 @@
-
+/*
+ * Als de LOG-macro gedefinieerd is voegen de volgende macro's statements toe die naar de standaard error loggen.
+ * Anders worden de macro's naar een lege string geëxpandeerd.
+ */
 
 #ifdef LOG
 #define DEBUG(msg, arg)	\

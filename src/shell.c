@@ -3,7 +3,6 @@
 #include "parser.h"
 #include "run.h"
 
-#ifdef PROD
 #include <stdlib.h>
 
 int main(void) {
@@ -21,11 +20,9 @@ int main(void) {
 		blocking = is_blocking_call(line);
 		number_of_cmds = get_commands(line, &commands);
 		run_commands(&commands, number_of_cmds, blocking);
-		reset_commands(&commands);
 		prompt();
 	}
 	exit_shell();
 
 	return EXIT_SUCCESS;
 }
-#endif

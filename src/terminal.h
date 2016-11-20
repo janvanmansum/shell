@@ -1,6 +1,10 @@
 #ifndef TERMINAL_H
 #define TERMINAL_H
 
+/*
+ * Module met hulpfuncties voor de communicatie met de terminal-gebruiker.
+ */
+
 #include <stdbool.h>
 
 /*

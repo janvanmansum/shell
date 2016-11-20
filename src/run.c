@@ -9,19 +9,70 @@
 #include <ctype.h>
 #include <fcntl.h>
 
-struct {
+/*
+ * De verzameling van pipes.
+ */
+static struct {
 	int size;
-	int pipes[MAXCOMMANDS - 1][2];
+	int number[MAXCOMMANDS - 1][2];
 } pipes;
 
+/*
+ * De volgende functies worden enkel binnen deze module aangeroepen en zijn daarom als static gedeclareerd.
+ */
+
+
+/*
+ * Voer een ingebouwd commando uit. Hiervoor wordt geen extern proces opgestart, maar binnen het shell-proces zelf een
+ * systeemfunctie aangeroepen.
+ */
 static bool execute_builtin(COMMAND *cmd);
+
+/*
+ * Het ingebouwde commando "change directory".
+ */
 static void cd(char *dir);
-static void create_pipes(int npipes);
+
+/*
+ * Vraagt aan het besturingssysteem om het aantal van "n" pipes aan te maken. Deze worden in de statische "pipes" structure
+ * (bovenaan dit bronbestand) gezet.
+ */
+static void create_pipes(int n);
+
+/*
+ * Past de strutures in "commands" aan zodat elk naar de juiste pipe-nummers verwijst in de "pipes" structure.
+ */
 static void install_pipes(COMMAND (*commands)[], int ncmd);
-static void create_processes(COMMAND (*commands)[], bool blocking, int ncmd, pid_t (*pids)[]);
+
+/*
+ * Maakt een nieuw proces voor elk command en start daarin de in de struct beschreven programma-aanroep uit. De proces-ID's van de
+ * gestarte processen worden in de array pids geplaatst. Als "foreground" true is, worden de processen op de voorgrond
+ * gestart, anders worden ze met helper-processen op de achtergrond gestart.
+ */
+static void create_processes(COMMAND (*commands)[], bool foreground, int ncmd, pid_t (*pids)[]);
+
+/*
+ * Maakt een proces aan voor de in "cmd" beschreven programma-aanroep en retourneert het proces-ID van het dit proces (als
+ * "foreground" true is) of van een helper-proces  (als "foreground" false is).
+ */
 static pid_t create_process(COMMAND *cmd, bool foreground);
+
+/*
+ * Voert de programma-aanroep beschreven in "cmd" uit binnen een reeds geforked proces. Voordat de exec-systeemaanroep
+ * wordt uitgevoerd, worden de standaardinvoer en -uitvoer goed ingesteld en overbodige filedescriptors gesloten.
+ */
 static void exec_command(COMMAND *cmd);
+
+/*
+ * Sluit all filedescriptors in de pipes-struct.
+ */
 static void close_pipes();
+
+/*
+ * Wacht tot de programma-aanroepen beschreven in "commands" terugkeren. Hiervoor worden de proces-ID's in de array "pids"
+ * gebruikt. Hierin moeten daarom de proces-ID's van betreffende processen (bij forground-aanroep) of hun helpers (bij
+ * background-aanroep) staan.
+ */
 static void wait_for_processes(COMMAND (*commands)[], int ncmd, pid_t (*pids)[]);
 
 void run_commands(COMMAND (*commands)[], int ncmd, bool blocking) {
@@ -74,11 +125,11 @@ static void cd(char *dir) {
 	}
 }
 
-static void create_pipes(int npipes) {
-	DEBUG("create_pipes: number of pipes = %d", npipes)
-	for (int i = 0; i != npipes; ++i)
-		pipe(pipes.pipes[i]);
-	pipes.size = npipes;
+static void create_pipes(int n) {
+	DEBUG("create_pipes: number of pipes = %d", n)
+	for (int i = 0; i != n; ++i)
+		pipe(pipes.number[i]);
+	pipes.size = n;
 }
 
 static void install_pipes(COMMAND (*commands)[], int ncmd) {
@@ -93,11 +144,11 @@ static void install_pipes(COMMAND (*commands)[], int ncmd) {
 	}
 }
 
-static void create_processes(COMMAND (*commands)[], bool blocking, int ncmd, pid_t (*pids)[]) {
+static void create_processes(COMMAND (*commands)[], bool foreground, int ncmd, pid_t (*pids)[]) {
 	DEBUG("create_processes: number of processes = %d", ncmd)
 	for (int i = 0; i != ncmd	; ++i) {
 		COMMAND *cmd = *commands + i;
-		(*pids)[i] = create_process(cmd, blocking);
+		(*pids)[i] = create_process(cmd, foreground);
 	}
 }
 
@@ -166,19 +217,28 @@ static void wait_for_processes(COMMAND (*commands)[], int ncmd, pid_t (*pids)[])
 }
 
 static void exec_command(COMMAND *cmd) {
+	if (cmd->in_pipe_index != -1 && cmd->input != NULL)
+		printf("WARNING: both in-pipe and input file specified. Ignoring input file.\n ");
+	if (cmd->out_pipe_index != -1 && cmd->output != NULL)
+		printf("WARNING: both out-pipe and output file specified. Ignoring output file.\n ");
+
 	if (cmd->in_pipe_index != -1) {
 		DEBUG("exec_command: '%s', reading STDIN from pipe", cmd->args[0])
-		dup2(pipes.pipes[cmd->in_pipe_index][0], STDIN_FILENO);
+		dup2(pipes.number[cmd->in_pipe_index][0], STDIN_FILENO);
 	} else if (cmd->input != NULL) {
-		DEBUG2("exec_command: '%s', reading STDIN from file: '%s'", cmd->args[0], cmd->input)
-		int in_filedes = open(cmd->input, O_RDONLY);
-		dup2(in_filedes, STDIN_FILENO);
-		close(in_filedes);
+		if(access(cmd->input, F_OK) != -1) {
+			DEBUG2("exec_command: '%s', reading STDIN from file: '%s'", cmd->args[0], cmd->input)
+			int in_filedes = open(cmd->input, O_RDONLY);
+			dup2(in_filedes, STDIN_FILENO);
+			close(in_filedes);
+		} else {
+			printf("WARNING: cannot open input file: '%s'. Ignoring.\n", cmd->input);
+		}
 	}
 
 	if (cmd->out_pipe_index != -1) {
 		DEBUG("exec_command: '%s', writing STDOUT to pipe", cmd->args[0])
-		dup2(pipes.pipes[cmd->out_pipe_index][1], STDOUT_FILENO);
+		dup2(pipes.number[cmd->out_pipe_index][1], STDOUT_FILENO);
 	} else if (cmd->output != NULL) {
 		DEBUG2("exec_command: '%s', writing STDOUT to file: '%s'", cmd->args[0], cmd->output)
 		int out_filedes = open(cmd->output, O_WRONLY | O_CREAT,
@@ -195,10 +255,10 @@ static void exec_command(COMMAND *cmd) {
 }
 
 static void close_pipes() {
-	DEBUG("close_pipes: number of pipes = %d", pipes.size)
+	DEBUG("close_pipes: number of pipes = %d", number.size)
 	for (int i = 0; i != pipes.size; ++i) {
-		close(pipes.pipes[i][0]);
-		close(pipes.pipes[i][1]);
+		close(pipes.number[i][0]);
+		close(pipes.number[i][1]);
 	}
 	pipes.size = 0;
 }
